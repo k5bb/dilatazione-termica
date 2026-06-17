@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Environment / secrets
+backend/.env
+.env
+
+# Frontend build
+frontend/dist/
+frontend/node_modules/
+
+# macOS
+.DS_Store
+
+# Backend dist (generato dal Dockerfile)
+backend/dist/
