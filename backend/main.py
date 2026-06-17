@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dotenv import load_dotenv
-load_dotenv()  # loads ANTHROPIC_API_KEY and any other vars from .env
+load_dotenv()
 
 import os as _os
 
@@ -11,6 +11,11 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+
+from database import Base, SessionLocal, engine
+from db_models import User
+from auth import hash_password
+from routes_auth import router as auth_router
 
 from models import (
     CalcoloRequest,
@@ -48,9 +53,38 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE", "PUT"],
     allow_headers=["*"],
 )
+
+app.include_router(auth_router)
+
+# ── DB init + admin bootstrap ─────────────────────────────────────────────────
+
+@app.on_event("startup")
+def _startup():
+    Base.metadata.create_all(bind=engine)
+
+    admin_user = _os.environ.get("ADMIN_USERNAME", "admin")
+    admin_pass = _os.environ.get("ADMIN_PASSWORD", "")
+    admin_mail = _os.environ.get("ADMIN_EMAIL", f"{admin_user}@localhost")
+
+    if not admin_pass:
+        return  # no password set — skip bootstrap (dev mode)
+
+    db = SessionLocal()
+    try:
+        exists = db.query(User).filter_by(username=admin_user).first()
+        if not exists:
+            db.add(User(
+                username=admin_user,
+                email=admin_mail,
+                hashed_password=hash_password(admin_pass),
+                is_admin=True,
+            ))
+            db.commit()
+    finally:
+        db.close()
 
 _BOTTLE_DESCRIPTIONS = {
     "TRADITION": "Bordolese Tradition 750 mL — profilo collo da scheda tecnica VP Tradition",
@@ -129,7 +163,7 @@ def health():
     return {"status": "ok", "version": app.version}
 
 
-@app.get("/bottiglie", response_model=list[BottleModel], tags=["bottiglie"])
+@app.get("/bottiglie", response_model=list[BottleModel], tags=["bottiglie"], include_in_schema=False)
 def list_bottiglie():
     out = []
     for name in BUILTIN_NECK_NAMES:

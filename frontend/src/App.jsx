@@ -1,22 +1,27 @@
 import { useState, useRef } from 'react'
-import CalcoloForm from './components/CalcoloForm'
-import ResultsPanel from './components/ResultsPanel'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
+import LoginPage      from './pages/LoginPage'
+import CalcoloForm    from './components/CalcoloForm'
+import ResultsPanel   from './components/ResultsPanel'
 import ComparisonPanel from './components/ComparisonPanel'
-import PrintReport from './components/PrintReport'
+import PrintReport    from './components/PrintReport'
+import IntroSection   from './components/IntroSection'
+import AdminPanel     from './components/AdminPanel'
 
-export default function App() {
-  const [result,      setResult]      = useState(null)
-  const [loading,     setLoading]     = useState(false)
-  const [comparisons, setComparisons] = useState([])
+function AppInner() {
+  const { user, logout } = useAuth()
+  const [result,       setResult]       = useState(null)
+  const [loading,      setLoading]      = useState(false)
+  const [comparisons,  setComparisons]  = useState([])
+  const [showAdmin,    setShowAdmin]    = useState(false)
   const countRef = useRef(0)
+
+  if (!user) return <LoginPage />
 
   function addToComparison() {
     if (!result) return
     countRef.current += 1
-    setComparisons(prev => [
-      ...prev,
-      { id: Date.now(), label: `Calcolo ${countRef.current}`, result },
-    ])
+    setComparisons(prev => [...prev, { id: Date.now(), label: `Calcolo ${countRef.current}`, result }])
   }
 
   function removeFromComparison(id) {
@@ -29,16 +34,14 @@ export default function App() {
 
   return (
     <>
-      {/* Print report — visible only @media print */}
       <PrintReport result={result} comparisons={comparisons} />
 
-      {/* Screen layout — hidden when printing */}
       <div className="min-h-screen no-print-wrapper">
 
         {/* Header */}
         <header className="glass border-b border-white/10 sticky top-0 z-10">
           <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
-            <div>
+            <div className="flex-1">
               <h1 className="text-sm font-bold text-white leading-none tracking-wide uppercase">
                 Dilatazione Termica Apparente
               </h1>
@@ -46,21 +49,39 @@ export default function App() {
                 Bevande alcoliche in bottiglia · Conformità Dir. UE 76/211/CEE
               </p>
             </div>
+
+            {/* User controls */}
+            <div className="flex items-center gap-3">
+              {user.is_admin && (
+                <button
+                  onClick={() => setShowAdmin(true)}
+                  className="text-[10px] font-semibold text-blue-400 hover:text-blue-300 border border-blue-400/30 hover:border-blue-300/50 px-2.5 py-1 rounded transition-all"
+                >
+                  Admin
+                </button>
+              )}
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-white/35">{user.username}</span>
+                <button
+                  onClick={logout}
+                  className="text-[10px] text-white/35 hover:text-white/70 transition-colors"
+                >
+                  Esci
+                </button>
+              </div>
+            </div>
           </div>
         </header>
 
-        {/* Main layout */}
+        {/* Main */}
         <main className="max-w-5xl mx-auto px-4 py-6">
+
+          <IntroSection />
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-
             <div>
-              <CalcoloForm
-                onResult={setResult}
-                loading={loading}
-                setLoading={setLoading}
-              />
+              <CalcoloForm onResult={setResult} loading={loading} setLoading={setLoading} />
             </div>
-
             <div>
               {loading && (
                 <div className="flex items-center justify-center h-48 text-white/40">
@@ -71,10 +92,7 @@ export default function App() {
                 </div>
               )}
               {!loading && result && (
-                <ResultsPanel
-                  result={result}
-                  onAddToComparison={addToComparison}
-                />
+                <ResultsPanel result={result} onAddToComparison={addToComparison} />
               )}
               {!loading && !result && (
                 <div className="flex items-center justify-center h-64 rounded-lg border border-white/10 text-white/30">
@@ -85,10 +103,8 @@ export default function App() {
                 </div>
               )}
             </div>
-
           </div>
 
-          {/* Comparison panel — full width, below main grid */}
           {comparisons.length > 0 && (
             <ComparisonPanel
               comparisons={comparisons}
@@ -98,7 +114,16 @@ export default function App() {
           )}
         </main>
 
+        {showAdmin && <AdminPanel onClose={() => setShowAdmin(false)} />}
       </div>
     </>
+  )
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppInner />
+    </AuthProvider>
   )
 }

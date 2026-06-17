@@ -1,67 +1,48 @@
-import { useState, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useAuth } from '../contexts/AuthContext'
 
-const KEY = 'dtt_bottle_library_v1'
-
-function load() {
-  try {
-    const raw = localStorage.getItem(KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch {
-    return []
-  }
-}
-
-function persist(bottles) {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(bottles))
-  } catch { /* storage full */ }
-}
-
-/**
- * useBottleLibrary — CRUD hook backed by localStorage.
- *
- * Each bottle:
- *   { id, name, volume_mL, h_fill_mm, bore_diameter_mm, neck_points, source, createdAt }
- *
- * neck_points: [{h_mm, d_int_mm}] | null
- */
 export function useBottleLibrary() {
-  const [bottles, setBottles] = useState(load)
+  const { token } = useAuth()
+  const [bottles, setBottles] = useState([])
 
-  const addBottle = useCallback((data) => {
-    const entry = {
-      id: crypto.randomUUID(),
-      name: data.name ?? 'Bottiglia',
-      volume_mL: data.volume_mL ?? null,
-      h_fill_mm: data.h_fill_mm ?? null,
-      bore_diameter_mm: data.bore_diameter_mm ?? null,
-      neck_points: data.neck_points ?? null,
-      source: data.source ?? 'manual',
-      createdAt: new Date().toISOString(),
-    }
-    setBottles(prev => {
-      const updated = [...prev, entry]
-      persist(updated)
-      return updated
+  const authHeaders = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  }
+
+  const reload = useCallback(async () => {
+    if (!token) { setBottles([]); return }
+    const res  = await fetch('/user/bottles', { headers: authHeaders })
+    if (res.ok) setBottles(await res.json())
+  }, [token])
+
+  useEffect(() => { reload() }, [reload])
+
+  const addBottle = useCallback(async (data) => {
+    const res = await fetch('/user/bottles', {
+      method:  'POST',
+      headers: authHeaders,
+      body: JSON.stringify({
+        name:             data.name ?? 'Bottiglia',
+        volume_mL:        data.volume_mL        ?? null,
+        h_fill_mm:        data.h_fill_mm        ?? null,
+        bore_diameter_mm: data.bore_diameter_mm ?? null,
+        neck_points:      data.neck_points      ?? null,
+        source:           data.source           ?? 'manual',
+      }),
     })
-    return entry
-  }, [])
+    const saved = await res.json()
+    if (res.ok) setBottles(prev => [...prev, saved])
+    return saved
+  }, [token])
 
-  const removeBottle = useCallback((id) => {
-    setBottles(prev => {
-      const updated = prev.filter(b => b.id !== id)
-      persist(updated)
-      return updated
-    })
-  }, [])
+  const removeBottle = useCallback(async (id) => {
+    await fetch(`/user/bottles/${id}`, { method: 'DELETE', headers: authHeaders })
+    setBottles(prev => prev.filter(b => b.id !== id))
+  }, [token])
 
-  const renameBottle = useCallback((id, newName) => {
-    setBottles(prev => {
-      const updated = prev.map(b => b.id === id ? { ...b, name: newName } : b)
-      persist(updated)
-      return updated
-    })
-  }, [])
+  // renameBottle: non supportato lato server per ora
+  const renameBottle = useCallback(() => {}, [])
 
-  return { bottles, addBottle, removeBottle, renameBottle }
+  return { bottles, addBottle, removeBottle, renameBottle, reload }
 }
