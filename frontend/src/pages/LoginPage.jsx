@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 
 function Field({ label, type = 'text', value, onChange, placeholder }) {
@@ -29,6 +29,15 @@ export default function LoginPage() {
   const [email,    setEmail]    = useState('')
   const [password, setPassword] = useState('')
   const [code,     setCode]     = useState('')
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const invite = params.get('invite')
+    if (invite) {
+      setCode(invite)
+      setMode('register')
+    }
+  }, [])
 
   async function handleSubmit(e) {
     e.preventDefault()
